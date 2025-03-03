@@ -114,17 +114,16 @@
         // Classes
         class Player {
             constructor() {
-                this.width = 30;
-                this.height = 40;
-                this.baseY = canvas.height - 120;
+                this.width = 60; // Más ancho para parecerse a un tanque
+                this.height = 40; // Más bajo y robusto
+                this.baseY = canvas.height - 100; // Posición base ajustada
                 this.characters = [];
                 this.updateCharacters();
             }
-            
+
             updateCharacters() {
                 this.characters = [];
                 const spread = Math.min(playerStats.characters * 30, 120);
-                
                 for (let i = 0; i < playerStats.characters; i++) {
                     let xOffset;
                     if (playerStats.characters === 1) {
@@ -132,49 +131,50 @@
                     } else {
                         xOffset = spread * (i / (playerStats.characters - 1) - 0.5);
                     }
-                    
                     this.characters.push({
                         x: gameState.mouseX + xOffset,
                         y: this.baseY
                     });
                 }
             }
-            
+
             draw() {
                 this.characters.forEach(char => {
-                    // Cuerpo del personaje
-                    ctx.fillStyle = '#4080FF';
-                    ctx.fillRect(char.x - this.width/2, char.y - this.height/2, this.width, this.height);
-                    
-                    // Cabeza del personaje
-                    ctx.fillStyle = '#80C0FF';
+                    // Cuerpo del tanque
+                    ctx.fillStyle = '#8B4513'; // Color marrón para el cuerpo
+                    ctx.fillRect(char.x - this.width / 2, char.y - this.height / 2, this.width, this.height);
+
+                    // Torreta del tanque
+                    ctx.fillStyle = '#404040'; // Color gris oscuro para la torreta
+                    ctx.fillRect(char.x - 10, char.y - this.height / 2 - 20, 20, 30);
+
+                    // Cañón del tanque
+                    ctx.fillStyle = '#000000'; // Color negro para el cañón
                     ctx.beginPath();
-                    ctx.arc(char.x, char.y - this.height/2 - 5, 10, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.moveTo(char.x, char.y - this.height / 2 - 20);
+                    ctx.lineTo(char.x, char.y - this.height / 2 - 50); // Longitud del cañón
+                    ctx.lineWidth = 6;
+                    ctx.stroke();
                 });
             }
-            
-            shoot() {
-                const now = Date.now();
-                const cooldown = playerStats.getFireRateInMs();
-                
-                if (now - gameState.lastShootTime > cooldown) {
-                    gameState.lastShootTime = now;
-                    
-                    this.characters.forEach(char => {
-                        bullets.push(new Bullet(char.x, char.y - 20, playerStats.power, playerStats.range));
-                    });
-                    
-                    return true;
-                }
-                return false;
-            }
-            
-            update() {
-                this.updateCharacters();
-            }
+
+    shoot() {
+        const now = Date.now();
+        const cooldown = playerStats.getFireRateInMs();
+        if (now - gameState.lastShootTime > cooldown) {
+            gameState.lastShootTime = now;
+            this.characters.forEach(char => {
+                bullets.push(new Bullet(char.x, char.y - 20, playerStats.power, playerStats.range));
+            });
+            return true;
         }
-        
+        return false;
+    }
+
+    update() {
+        this.updateCharacters();
+    }
+}   
         class Bullet {
             constructor(x, y, power, range) {
                 this.x = x;
@@ -347,26 +347,10 @@
             }
             
             apply() {
-                switch(this.type) {
-                    case 'character':
-                        playerStats.characters = Math.min(playerStats.characters + 1, 5);
-                        showReward('+1 Personaje');
-                        break;
-                    case 'power':
-                        playerStats.power += 0.5;
-                        showReward('+0.5 Poder de tiro');
-                        break;
-                    case 'fireRate':
-                        playerStats.fireRate += 0.3;
-                        showReward('+0.3 Cadencia de tiro');
-                        break;
-                    case 'range':
-                        playerStats.range += 0.5;
-                        showReward('+0.5 Alcance');
-                        break;
-                }
-                
-                updateStatsDisplay();
+                Upgrade.prototype.apply = function() {
+                    // No aplicar mejoras directamente
+                    console.log(`Mejora recolectada: ${this.type}, pero esperando desafío.`);
+                };
             }
         }
         
@@ -452,6 +436,81 @@
                 });
             }
         }
+
+        // Clase Challenge
+        class Challenge {
+            constructor(goal, rewardType, rewardAmount, description) {
+                this.goal = goal; // Meta para completar el desafío (e.g., daño acumulado)
+                this.rewardType = rewardType; // Tipo de mejora ('power', 'fireRate', etc.)
+                this.rewardAmount = rewardAmount; // Cantidad de mejora
+                this.description = description; // Descripción del desafío
+                this.progress = 0; // Progreso actual
+                this.completed = false; // Si el desafío ha sido completado
+            }
+
+            updateProgress(amount) {
+                if (!this.completed) {
+                    this.progress += amount;
+                    if (this.progress >= this.goal) {
+                        this.completed = true;
+                        return true; // Desafío completado
+                    }
+                }
+                return false;
+            }
+
+            applyReward() {
+                switch(this.rewardType) {
+                    case 'power':
+                        playerStats.power += this.rewardAmount;
+                        break;
+                    case 'fireRate':
+                        playerStats.fireRate += this.rewardAmount;
+                        break;
+                    case 'range':
+                        playerStats.range += this.rewardAmount;
+                        break;
+                    case 'character':
+                        playerStats.characters = Math.min(playerStats.characters + this.rewardAmount, 5);
+                        break;
+                }
+                updateStatsDisplay();
+                showReward(`¡Desafío completado! Recompensa: +${this.rewardAmount} ${this.rewardType}`);
+            }
+        }
+
+        // Variables globales para manejar desafíos
+        let currentChallenge = null;
+
+        // Función para iniciar un nuevo desafío
+        function startNewChallenge() {
+            const challenges = [
+                new Challenge(500, 'power', 2, '¡Desafío! Haz 500 puntos de daño'),
+                new Challenge(1000, 'fireRate', 0.5, '¡Desafío! Haz 1000 puntos de daño'),
+                new Challenge(2000, 'range', 1, '¡Desafío! Haz 2000 puntos de daño')
+            ];
+            currentChallenge = challenges[Math.floor(Math.random() * challenges.length)];
+            challengeElement.textContent = currentChallenge.description;
+            rewardElement.textContent = '';
+            challengeElement.style.display = 'block';
+        }
+
+        // Modificar la función takeDamage en la clase Enemy
+        Enemy.prototype.takeDamage = function(damage) {
+            const actualDamage = Math.min(this.health, damage);
+            this.health -= actualDamage;
+            gameState.damageDealt += actualDamage;
+
+            if (currentChallenge && !currentChallenge.completed) {
+                if (currentChallenge.updateProgress(actualDamage)) {
+                    currentChallenge.applyReward();
+                    startNewChallenge(); // Iniciar un nuevo desafío
+                }
+            }
+
+            damages.push(new DamageIndicator(this.x, this.y, actualDamage));
+            return this.health <= 0;
+        };
         
         // Inicializar objetos del juego
         const player = new Player();
@@ -616,6 +675,7 @@
         }
         
         // Iniciar el juego
+        startNewChallenge();
         updateStatsDisplay();
         gameLoop();
     </script>
